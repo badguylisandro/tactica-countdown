@@ -1,21 +1,26 @@
 name: TACTICA countdown
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "17 * * * *" # backup: restarts the loop if it ever stops
   workflow_dispatch:
 permissions:
   contents: write
-concurrency: countdown
+  actions: write
+concurrency:
+  group: countdown
+  cancel-in-progress: false
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install pillow requests
-      - run: python countdown.py
+      - name: First update
+        run: python countdown.py
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
       - name: Save message id
@@ -24,3 +29,16 @@ jobs:
           git config user.email "countdown-bot@users.noreply.github.com"
           git add message_id.txt
           git diff --cached --quiet || (git commit -m "Save countdown message id" && git push)
+      - name: Update every minute (about 5h30)
+        run: python countdown.py
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          LOOP_MINUTES: "330"
+      - name: Start the next run
+        if: always()
+        run: |
+          if [ "$(date -u +%s)" -lt "$(date -u -d '2026-11-29T00:00:00Z' +%s)" ]; then
+            gh workflow run countdown.yml --ref main --repo "$GITHUB_REPOSITORY"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
