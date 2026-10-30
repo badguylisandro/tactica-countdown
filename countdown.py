@@ -133,5 +133,15 @@ if __name__ == "__main__":
     if os.environ.get("PREVIEW"):
         at = dt.datetime.fromisoformat(os.environ["PREVIEW"])
         open("preview.png", "wb").write(render(at))
+    elif os.environ.get("LOOP_MINUTES"):
+        # keep updating once a minute (GitHub's own schedule is too unreliable for a countdown)
+        import time
+        stop = time.time() + int(os.environ["LOOP_MINUTES"]) * 60
+        while time.time() < stop:
+            try:
+                main()
+            except Exception as e:  # a failed update (rate limit, network) just waits for the next minute
+                print("update failed:", e)
+            time.sleep(60 - time.time() % 60 + 1)
     else:
         main()
